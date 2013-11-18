@@ -18,6 +18,7 @@ package com.example.opentalk;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import com.example.opentalk.Translator;
@@ -28,6 +29,8 @@ import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -94,8 +97,10 @@ public class BluetoothChat extends Activity {
     // voice recognition, trnaslate and read text variables
     private static final int VOICE_RECOGNITION_REQUEST_CODE = 0;
 	protected static final String TAGT = "DictateTranslate";
-	private static  String inputLanguage = "en";	// the ui team should change this depending on the user
-	private static String outputLanguage = "ru"; 	// the ui team should change this depending on the user
+	
+	private static  String inputLanguage = "";//"en";	
+	private static String outputLanguage = "";//"de"; 	
+	
 	static boolean isTTSinitialized;
 	static TextView translatedTextView;
 	TextToSpeech textToSpeech;
@@ -109,8 +114,13 @@ public class BluetoothChat extends Activity {
 
         // Set up the window layout
         setContentView(R.layout.main);
-
-        // Get local Bluetooth adapter
+        
+        inputLanguage = "en";
+        		
+        outputLanguage = "de";
+        	       
+        
+	    // Get local Bluetooth adapter
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         // If the adapter is null, then Bluetooth is not supported
@@ -120,33 +130,6 @@ public class BluetoothChat extends Activity {
             return;
         }
         
-        /*
-	     * Text to Speech Stuff
-	     */
-	    
-	    // Initialize text to speech
-		textToSpeech = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-		        public void onInit(int status) {
-		            if (status == TextToSpeech.SUCCESS) {
-		            	
-		            	isTTSinitialized = true;
-		            		
-		            }
-		            else {
-		            	
-		            	isTTSinitialized = false;
-		            	Log.e(TAG, "Failed to intialize Text to Speech");
-		            	
-		            }
-		        }
-		});
-    }
-    
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        if(D) Log.e(TAG, "++ ON START ++");
 
         // If BT is not on, request that it be enabled.
         // setupChat() will then be called during onActivityResult
@@ -157,9 +140,40 @@ public class BluetoothChat extends Activity {
         } else {
             if (mChatService == null) setupChat();
         }
-    }
-
+        
+        
+		/*
+		 * Voice Recognition Stuff
+		 */
+		PackageManager pm = getPackageManager();
+	    List<ResolveInfo> voiceRecognitionCheck = pm.queryIntentActivities(new Intent
+	    											(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0);
+	    
+	    
+	    
+	    /*
+	     * Text to Speech Stuff
+	     */
+	    
+	    // Initialize text to speech
+		textToSpeech = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+		        public void onInit(int status) {
+		            if (status == TextToSpeech.SUCCESS) {
+		            	isTTSinitialized = true;            		
+		            }
+		            else {		            	
+		            	isTTSinitialized = false;
+		            	Log.e(TAG, "Failed to intialize Text to Speech");		            	
+		            }
+		        }
+		});
+	
     
+    
+    }
+    
+
+
     @Override
     public synchronized void onResume() {
         super.onResume();
@@ -194,13 +208,12 @@ public class BluetoothChat extends Activity {
         mSendButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 // Send a message using content of the edit text widget
-                TextView view = (TextView) findViewById(R.id.edit_text_out);
+               // TextView view = (TextView) findViewById(R.id.edit_text_out);
                 //String message = view.getText().toString();
-                //sendMessage(message);
+            	Log.v("BluetoothChat","Send Button Clicked");
                 startVoiceRecognitionActivity();
             	
-                
-                
+             
             }
         });
 
@@ -276,7 +289,8 @@ public class BluetoothChat extends Activity {
             if (actionId == EditorInfo.IME_NULL && event.getAction() == KeyEvent.ACTION_UP) {
 //*******************************  PUT Voice Listener  *************************************************************                           	  
                // String message = view.getText().toString();
-            	 startVoiceRecognitionActivity();
+            	
+            	//startVoiceRecognitionActivity();
             	 
                // sendMessage(message);
             }
@@ -326,9 +340,11 @@ public class BluetoothChat extends Activity {
                 byte[] readBuf = (byte[]) msg.obj;
                 // construct a string from the valid bytes in the buffer
                 String readMessage = new String(readBuf, 0, msg.arg1);
-                mConversationArrayAdapter.add(mConnectedDeviceName+":  " + readMessage);
+                new TranslateText().execute(readMessage,outputLanguage, inputLanguage);  
+                
+                // change to translate input message here
 //*******************************  PUT TEXT READER  *************************************************************
-                convertToSpeech(readMessage);
+               // convertToSpeech(readMessage);
                 
                 break;
             case MESSAGE_DEVICE_NAME:
@@ -357,7 +373,8 @@ super.onActivityResult(requestCode, resultCode, data);
                     RecognizerIntent.EXTRA_RESULTS);
             
             //After the dictation the most confident string is sent to be translated
-            new TranslateText().execute(matches.get(0),inputLanguage, outputLanguage);  
+            sendMessage(matches.get(0));
+            //new TranslateText().execute(matches.get(0),inputLanguage, outputLanguage);  
         }
     	
         switch (requestCode) {
@@ -447,32 +464,35 @@ super.onActivityResult(requestCode, resultCode, data);
     			Log.e("Translate", "IOException");
     			e.printStackTrace();
     		}
-    		sendMessage(translatedText);
     		return translatedText;
     	}
     	
-    	//@Override
-    //	protected void onPostExecute(String translatedText) {
+    	@Override
+    	protected void onPostExecute(String translatedText) {
     		// TODO Things to do with translated Text
     		// Below an example for text to speech using the translated Text
-    	//	convertToSpeech(translatedText);
-    	//}
+    	    //convertToSpeech(translatedText);
+    		//sendMessage(translatedText);
+    		mConversationArrayAdapter.add(mConnectedDeviceName+":  " + translatedText);
+    		convertToSpeech(translatedText);
+    	}
+    	
     }
     
   //Converts text to speech
   	private void convertToSpeech(String text){
   		
-  		if(textToSpeech.isLanguageAvailable(new Locale(outputLanguage)) == TextToSpeech.LANG_AVAILABLE){
+  		if(textToSpeech.isLanguageAvailable(new Locale(inputLanguage)) == TextToSpeech.LANG_AVAILABLE){
   			
   			//Checks if tts data is available, if not prompts user to install it
   			
-  			textToSpeech.setLanguage(new Locale(outputLanguage));
-  			Log.v("Translate", "Language Available: " + outputLanguage);
+  			textToSpeech.setLanguage(new Locale(inputLanguage));
+  			Log.v("Translate", "Language Available: " + inputLanguage);
   			textToSpeech.speak(text, TextToSpeech.QUEUE_ADD, null);
   			
   		}else{
   			
-  			Log.e("Translate", "Language Not Available: " + outputLanguage);
+  			Log.e("Translate", "Language Not Available: " + inputLanguage);
   			 Intent installIntent = new Intent();
                installIntent.setAction(
                    TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
